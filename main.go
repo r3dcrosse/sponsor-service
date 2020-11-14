@@ -11,9 +11,10 @@ import (
 	"github.com/gorilla/mux"
 )
 
+
 //////////////////////////////////////////////////////////////
 //
-// Anti-Corruption Layer Models
+// Our Microservice Models
 //
 //////////////////////////////////////////////////////////////
 // Sponsor struct
@@ -29,6 +30,7 @@ type Level struct {
 	Name           string `json:"name"`
 	Cost           string `json:"cost"`
 	NumberOfBadges int    `json:"number_of_badges"`
+	Id int `json:"id"`
 }
 
 // Team Member struct (team members part of a sponsor)
@@ -40,11 +42,12 @@ type Member struct {
 
 //////////////////////////////////////////////////////////////
 //
-// Our Microservice Models
+// Anti-Corruption Layer Models
 //
 //////////////////////////////////////////////////////////////
 // Event struct
 type Event struct {
+	Id int
 	Name     string
 	Levels   []Level
 	Sponsors []Sponsor
@@ -79,6 +82,7 @@ func (m *RabbitMQClient) ConnectToRabbitMQ(ip string) {
 func (m *RabbitMQClient) SendOnQueue(body []byte, queueName string) error {
 	ch, err := m.connection.Channel()
 	defer ch.Close()
+
 
 	q, err := ch.QueueDeclare(
 		queueName, // name

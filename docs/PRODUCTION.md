@@ -2,6 +2,23 @@
 
 You need Docker installed on your system to do this...
 
+# Set up postgres
+## Get the latest postgres Docker image
+```
+docker pull postgres
+```
+## Create a place to store data locally
+This is kinda optional, but it's good to do if you want your data to
+persist between starting/stopping your postgres docker image.
+```
+mkdir ${HOME}/postgres-data
+```
+
+## Run the postgres docker image
+```
+docker run -d --name sponsor-postgres -e POSTGRES_PASSWORD=anyPasswordYouWantGoesHere -v ${HOME}/postgres-data/:/var/lib/postgresql/data -p 5432:5432 postgres
+```
+
 ## Step 1: Clone this repo
 Make sure to `cd` into the cloned repo
 ```
@@ -10,7 +27,7 @@ git clone https://github.com/r3dcrosse/sponsor-service
 cd sponsor-service
 ```
 
-## Step 2: Build the Docker image
+## Step 2: Build the sponsor-service Docker image
 This may take a couple minutes to complete
 ```
 docker build -t sponsor-service .
@@ -23,7 +40,7 @@ REPOSITORY               TAG                 IMAGE ID            CREATED        
 sponsor-service          latest              4e4a8a0a0af8        5 minutes ago       314MB
 ```
 
-## Step 3: Run the Docker image
+## Step 3: Run the sponsor-service Docker image
 Note: you must know what IP and port rabbitMQ is running on because you
 will pass those in as an argument when running the docker image.
 

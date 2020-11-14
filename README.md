@@ -8,8 +8,10 @@ This microservice specifically handles sponsorships at a conference.
 
 * [Architecture](docs/ARCHITECTURE.md)
 * [REST API Documentation](docs/REST_API.md)
+* [RabbitMQ Spec](docs/RABBITMQ_MESSAGES.md)
 * [Development](docs/DEVELOPMENT.md)
 * [How to run this service with Docker a.k.a production](docs/PRODUCTION.md)
+* [Helpful Links](docs/LINKS.md)
 
 ## Requirements
 

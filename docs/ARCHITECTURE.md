@@ -1,4 +1,4 @@
 # Architecture
 
-Initial thoughts on the domain design:
-![domain design v1](assets/v1.png)
+Domain design:
+![domain design v2](assets/v2.png)
