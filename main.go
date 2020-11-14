@@ -9,6 +9,43 @@ import (
 	"github.com/gorilla/mux"
 )
 
+//////////////////////////////////////////////////////////////
+//
+// Anti-Corruption Layer Models
+//
+//////////////////////////////////////////////////////////////
+// Sponsor struct
+type Sponsor struct {
+	Event string `json:"event"`
+	Level Level `json:"level"`
+	Members []Members `json:"members"`
+}
+
+// Level struct
+type Level struct {
+	Name string `json:"name"`
+	Cost string `json:"cost"`
+	NumberOfBadges int `json:"number_of_badges"`
+}
+
+// Team Members struct (team members part of a sponsor)
+type Members struct {
+	Name string `json:"name"`
+	Email string `json:"email"`
+}
+
+//////////////////////////////////////////////////////////////
+//
+// Our Microservice Models
+//
+//////////////////////////////////////////////////////////////
+// Event struct
+type Event struct {
+	Name string
+	Levels []Level
+	Sponsors []Sponsor
+}
+
 // Initialize data
 var events []Event
 var sponsors []Sponsor
@@ -41,6 +78,8 @@ func createSponsor(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&sponsor)
 	if err != nil {
 		fmt.Println(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	sponsors = append(sponsors, sponsor)
@@ -57,7 +96,7 @@ func main() {
 
 	// Route handles and endpoints
 	router.HandleFunc("/sponsor/{event}", getSponsorsForEvent).Methods("GET") // show a list of sponsor organization names and each sponsor's level for an event
-	router.HandleFunc("/sponsor", createSponsor).Methods("POST") // create a sponsor at a specific level
+	router.HandleFunc("/sponsor-service/v1/sponsor", createSponsor).Methods("POST") // create a sponsor at a specific level
 	//router.HandleFunc("/sponsor/{id}", updateSponsor).Methods("PUT") // add people on the sponsors team
 	//router.HandleFunc("/sponsor/{id}", removeSponsor).Methods("DELETE") // remove people on the sponsors team
 
