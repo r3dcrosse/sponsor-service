@@ -4,6 +4,11 @@ A microservice for a fictional application that allows conference organizers to 
 
 This microservice specifically handles sponsorships at a conference.
 
+## Table of Contents
+
+* [REST API Documentation](./REST_API.md)
+* [Development](./DEVELOPMENT.md)
+
 ## Requirements
 
 The Sponsors Bounded Context manages the registration of sponsors and their representatives. Normally, a representative of the conference enters the sponsor company, organization, or person name for a specific level of sponsorship (as defined by the event). Then, as the representatives of the sponsor are identified, their name and email are added to the sponsor from which badges will be generated.
