@@ -6,8 +6,10 @@ This microservice specifically handles sponsorships at a conference.
 
 ## Table of Contents
 
-* [REST API Documentation](./REST_API.md)
-* [Development](./DEVELOPMENT.md)
+* [Architecture](docs/ARCHITECTURE.md)
+* [REST API Documentation](docs/REST_API.md)
+* [Development](docs/DEVELOPMENT.md)
+* [How to run this service with Docker a.k.a production](docs/PRODUCTION.md)
 
 ## Requirements
 
