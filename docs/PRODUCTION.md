@@ -24,7 +24,11 @@ sponsor-service          latest              4e4a8a0a0af8        5 minutes ago  
 ```
 
 ## Step 3: Run the Docker image
+Note: you must know what IP and port rabbitMQ is running on because you
+will pass those in as an argument when running the docker image.
+
+In this example, my IP where rabbitMQ is running is: "192.168.1.24:5672"
 ```
-docker run -p 1337:8000 -it sponsor-service
+docker run -p 1337:8000 -e RABBITMQ_IP="192.168.1.24:5672" -it sponsor-service
 ```
 Feel free to replace port 1337 with whatever port you want to run this service on

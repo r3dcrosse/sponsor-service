@@ -6,4 +6,6 @@ WORKDIR /sponsor-service
 RUN go mod download
 RUN go build -o main .
 
-CMD ["/sponsor-service/main"]
+ENV RABBITMQ_IP "localhost:5672"
+
+CMD ["sh", "-c", "/sponsor-service/main -rabbit=${RABBITMQ_IP}"]
