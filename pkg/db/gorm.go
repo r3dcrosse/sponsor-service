@@ -9,8 +9,8 @@ import (
 
 type Level struct {
 	gorm.Model
+	ID                    int
 	EventID               int
-	SponsorID             int
 	Name                  string `gorm:"column:level_name"`
 	Cost                  string
 	MaxNumberOfSponsors   int
@@ -19,6 +19,7 @@ type Level struct {
 
 type Member struct {
 	gorm.Model
+	ID        int
 	Name      string
 	Email     string
 	SponsorID int
@@ -29,7 +30,8 @@ type Sponsor struct {
 	ID      int
 	EventID int
 	Name    string
-	Level   Level `gorm:"foreignKey:Name"`
+	LevelID int
+	Level   Level
 	Members []Member
 }
 
@@ -48,6 +50,51 @@ func initialMigration(db *gorm.DB) {
 	db.AutoMigrate(&Event{})
 }
 
+func CreateMember(name string, email string, sponsorId int) *Member {
+	member := Member{
+		Name:      name,
+		Email:     email,
+		SponsorID: sponsorId,
+	}
+	Database.Create(&member)
+
+	return &member
+}
+
+func GetLevel(id int) (*Level, error) {
+	var level Level
+	var error error
+	err := Database.First(&level, id)
+	if errors.Is(err.Error, gorm.ErrRecordNotFound) {
+		error = gorm.ErrRecordNotFound
+	}
+	return &level, error
+}
+
+func CreateLevel(name string, cost string, maxNumSponsors int, maxNumBadges int, eventId int) *Level {
+	level := Level{
+		Name:                  name,
+		EventID:               eventId,
+		MaxNumberOfSponsors:   maxNumSponsors,
+		MaxNumberOfFreeBadges: maxNumBadges,
+		Cost:                  cost,
+	}
+	Database.Create(&level)
+
+	return &level
+}
+
+func CreateSponsorWithLevel(name string, levelId int, eventId int) *Sponsor {
+	sponsor := Sponsor{
+		Name:    name,
+		EventID: eventId,
+		LevelID: levelId,
+	}
+	Database.Create(&sponsor)
+
+	return &sponsor
+}
+
 func CreateSponsor(name string, eventId int) *Sponsor {
 	sponsor := Sponsor{
 		Name:    name,
@@ -56,6 +103,16 @@ func CreateSponsor(name string, eventId int) *Sponsor {
 	Database.Create(&sponsor)
 
 	return &sponsor
+}
+
+func GetSponsor(id int) (*Sponsor, error) {
+	var sponsor Sponsor
+	var error error
+	err := Database.First(&sponsor, id)
+	if errors.Is(err.Error, gorm.ErrRecordNotFound) {
+		error = gorm.ErrRecordNotFound
+	}
+	return &sponsor, error
 }
 
 func GetEvent(id int) (*Event, error) {
@@ -74,16 +131,6 @@ func CreateEvent(name string) *Event {
 	Database.Create(&event)
 
 	return &event
-}
-
-func CreateMember(m struct {
-	Name  string
-	Email string
-}) {
-	Database.Create(&Member{
-		Name:  m.Name,
-		Email: m.Email,
-	})
 }
 
 // Initialize variables

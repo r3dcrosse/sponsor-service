@@ -89,7 +89,6 @@ POST /sponsor-service/v1/event/1/level
   "data": {
     "level": {
       "eventId": 1,
-      "eventName": "DEFCON",
       "name": "Diamond",
       "cost": "$250K",
       "maxSponsors": 1,
@@ -117,18 +116,36 @@ You must pass an event_id that exists in the sponsor service, otherwise you'll g
 ```
 // Example 1
 POST /sponsor-service/v1/event/1/sponsor
-{ "name": "doge company", "level": "Diamond" }
+{
+    "name": "Doge Company",
+    "level": {
+        "name": "Diamond+",
+        "cost": "$250K",
+        "maxSponsors": 1,
+        "maxFreeBadgesPerSponsor": 25
+    }
+}
 
 // JSON response:
 {
-  "success": true,
-  "data": {
-    "sponsor": {
-      "id": 1,
-      "name": "doge company",
-      "level": "Diamond"
+    "success": true,
+    "data": {
+        "sponsor": {
+            "event": "My Event",
+            "eventId": 1,
+            "name": "Doge Company",
+            "level": {
+                "eventId": 1,
+                "name": "Diamond+",
+                "cost": "$250K",
+                "maxSponsors": 1,
+                "maxFreeBadgesPerSponsor": 25,
+                "id": 1
+            },
+            "members": null,
+            "id": 1
+        }
     }
-  }
 }
 ```
 

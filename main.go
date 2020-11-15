@@ -21,7 +21,7 @@ import (
 // Sponsor struct
 type Sponsor struct {
 	Event   string   `json:"event"`
-	EventID int      `json:"event_id"`
+	EventID int      `json:"eventId"`
 	Name    string   `json:"name"`
 	Level   Level    `json:"level"`
 	Members []Member `json:"members"`
@@ -30,17 +30,20 @@ type Sponsor struct {
 
 // Level struct
 type Level struct {
-	Name           string `json:"name"`
-	Cost           string `json:"cost"`
-	NumberOfBadges int    `json:"number_of_badges"`
-	Id             int    `json:"id"`
+	EventID                 int    `json:"eventId"`
+	Name                    string `json:"name"`
+	Cost                    string `json:"cost"`
+	MaxSponsors             int    `json:"maxSponsors"`
+	MaxFreeBadgesPerSponsor int    `json:"maxFreeBadgesPerSponsor"`
+	Id                      int    `json:"id"`
 }
 
 // Team Member struct (team members part of a sponsor)
 type Member struct {
-	Name  string `json:"name"`
-	Email string `json:"email"`
-	Id    int    `json:"id"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	Id        int    `json:"id"`
+	SponsorId int    `json:"sponsorId"`
 }
 
 //////////////////////////////////////////////////////////////
@@ -148,34 +151,173 @@ var messaging RabbitMQClient
 //}
 
 // To create a member of a sponsor team
-func createMember(m Member) Member {
-	name := m.Name
-	email := m.Email
+func createMember(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(r) // Gets params
+	eventId, err := strconv.Atoi(params["event_id"])
 
-	// @todo: create this member in the DB and get/set the ID for it
-	db.CreateMember(struct {
-		Name  string
-		Email string
-	}{Name: m.Name, Email: m.Email})
-	id := 1337
-	m.Id = id
-	fmt.Printf("Trying to create member: %s with email: %s and id: %d\n", name, email, id)
+	// Check if the event even exists
+	event, err := db.GetEvent(eventId)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(HttpErrorJSON{
+			Success: false,
+			Error: map[string]interface{}{
+				"error": map[string]interface{}{
+					"message": err.Error(),
+				},
+			},
+		})
+		return
+	}
+
+	// Check if the sponsor team exists
+	sponsorId, err := strconv.Atoi(params["sponsor_id"])
+	s, err := db.GetSponsor(sponsorId)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(HttpErrorJSON{
+			Success: false,
+			Error: map[string]interface{}{
+				"error": map[string]interface{}{
+					"message": err.Error(),
+				},
+			},
+		})
+		return
+	}
+	sponsor := Sponsor{
+		Name: s.Name,
+		Id:   s.ID,
+	}
+
+	// Get the sponsorship level from the DB
+	l, err := db.GetLevel(s.LevelID)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(HttpErrorJSON{
+			Success: false,
+			Error: map[string]interface{}{
+				"error": map[string]interface{}{
+					"message": err.Error(),
+				},
+			},
+		})
+		return
+	}
+	level := Level{
+		Id:   l.ID,
+		Name: l.Name,
+	}
+
+	member := Member{
+		SponsorId: sponsorId,
+	}
+	err = json.NewDecoder(r.Body).Decode(&member)
+	if err != nil {
+		fmt.Println(err)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(HttpErrorJSON{
+			Success: false,
+			Error: map[string]interface{}{
+				"error": map[string]interface{}{
+					"message": err.Error(),
+				},
+			},
+		})
+		return
+	}
+
+	// Now create the member in the DB
+	result := db.CreateMember(member.Name, member.Email, member.SponsorId)
+	savedMember := Member{
+		Id:        result.ID,
+		Name:      result.Name,
+		Email:     result.Email,
+		SponsorId: result.SponsorID,
+	}
+
+	json.NewEncoder(w).Encode(HttpResponseJSON{
+		Success: true,
+		Data: map[string]interface{}{
+			"member": savedMember,
+		},
+	})
 
 	// Send a rabbitMQ message that a member was created
-	go func(m Member) {
-		memberNotification := Member{
-			name,
-			email,
-			id,
+	go func(m Member, evId int, l Level, s Sponsor) {
+		memberNotification := map[string]interface{}{
+			"id":           m.Id,
+			"eventId":      evId,
+			"sponsorId":    m.SponsorId,
+			"name":         m.Name,
+			"email":        m.Email,
+			"organization": s.Name,
+			"eventName":    event.Name,
+			"sponsorLevel": l.Name,
 		}
 		data, _ := json.Marshal(memberNotification)
 		err := messaging.SendOnQueue(data, "sponsor.member.created")
 		if err != nil {
 			failOnError(err, "Something went wrong when sending the message")
 		}
-	}(m)
+	}(savedMember, eventId, level, sponsor)
 
-	return Member(m)
+}
+
+// To create a level
+func createLevel(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(r) // Gets params
+	eventId, err := strconv.Atoi(params["event_id"])
+	event, err := db.GetEvent(eventId)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(HttpErrorJSON{
+			Success: false,
+			Error: map[string]interface{}{
+				"error": map[string]interface{}{
+					"message": err.Error(),
+				},
+			},
+		})
+		return
+	}
+
+	level := Level{
+		EventID: event.ID,
+	}
+	err = json.NewDecoder(r.Body).Decode(&level)
+	if err != nil {
+		fmt.Println(err)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(HttpErrorJSON{
+			Success: false,
+			Error: map[string]interface{}{
+				"error": map[string]interface{}{
+					"message": err.Error(),
+				},
+			},
+		})
+		return
+	}
+
+	result := db.CreateLevel(level.Name, level.Cost, level.MaxSponsors, level.MaxFreeBadgesPerSponsor, event.ID)
+	savedLevel := Level{
+		Id:                      result.ID,
+		Name:                    result.Name,
+		Cost:                    result.Cost,
+		MaxFreeBadgesPerSponsor: result.MaxNumberOfFreeBadges,
+		MaxSponsors:             result.MaxNumberOfSponsors,
+		EventID:                 event.ID,
+	}
+
+	json.NewEncoder(w).Encode(HttpResponseJSON{
+		Success: true,
+		Data: map[string]interface{}{
+			"event": savedLevel,
+		},
+	})
 }
 
 // To create a sponsor
@@ -183,7 +325,6 @@ func createSponsor(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	params := mux.Vars(r) // Gets params
 	eventId, err := strconv.Atoi(params["event_id"])
-	fmt.Printf("USING EVENT ID: %d", eventId)
 	event, err := db.GetEvent(eventId)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
@@ -216,20 +357,77 @@ func createSponsor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := db.CreateSponsor(sponsor.Name, event.ID)
-	savedSponsor := Sponsor{
-		Id:      result.ID,
-		Name:    result.Name,
-		Event:   event.Name,
-		EventID: event.ID,
+	// Check for any Levels included in the request body
+	level := Level{
+		Id:                      sponsor.Level.Id,
+		EventID:                 eventId,
+		Name:                    sponsor.Level.Name,
+		Cost:                    sponsor.Level.Cost,
+		MaxSponsors:             sponsor.Level.MaxSponsors,
+		MaxFreeBadgesPerSponsor: sponsor.Level.MaxFreeBadgesPerSponsor,
+	}
+	if sponsor.Level.Id != 0 {
+		savedLevel, err := db.GetLevel(sponsor.Level.Id)
+		// Check if the event IDs match...
+		if err != nil || savedLevel.EventID != eventId {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(HttpErrorJSON{
+				Success: false,
+				Error: map[string]interface{}{
+					"error": map[string]interface{}{
+						"message": err.Error(),
+					},
+				},
+			})
+			return
+		}
+
+		level.Id = savedLevel.ID
+		level.EventID = savedLevel.EventID
+		level.Name = savedLevel.Name
+		level.Cost = savedLevel.Cost
+		level.MaxSponsors = savedLevel.MaxNumberOfSponsors
+		level.MaxFreeBadgesPerSponsor = savedLevel.MaxNumberOfFreeBadges
+	} else {
+		savedLevel := db.CreateLevel(level.Name, level.Cost, level.MaxSponsors, level.MaxFreeBadgesPerSponsor, eventId)
+		level.Id = savedLevel.ID
+		level.EventID = savedLevel.EventID
+		level.Name = savedLevel.Name
+		level.Cost = savedLevel.Cost
+		level.MaxSponsors = savedLevel.MaxNumberOfSponsors
+		level.MaxFreeBadgesPerSponsor = savedLevel.MaxNumberOfFreeBadges
 	}
 
-	json.NewEncoder(w).Encode(HttpResponseJSON{
-		Success: true,
-		Data: map[string]interface{}{
-			"sponsor": savedSponsor,
-		},
-	})
+	if level.Id == 0 {
+		result := db.CreateSponsor(sponsor.Name, event.ID)
+		savedSponsor := Sponsor{
+			Id:      result.ID,
+			Name:    result.Name,
+			Event:   event.Name,
+			EventID: event.ID,
+		}
+		json.NewEncoder(w).Encode(HttpResponseJSON{
+			Success: true,
+			Data: map[string]interface{}{
+				"sponsor": savedSponsor,
+			},
+		})
+	} else {
+		result := db.CreateSponsorWithLevel(sponsor.Name, level.Id, eventId)
+		savedSponsor := Sponsor{
+			Id:      result.ID,
+			Name:    result.Name,
+			Event:   event.Name,
+			EventID: event.ID,
+			Level:   level,
+		}
+		json.NewEncoder(w).Encode(HttpResponseJSON{
+			Success: true,
+			Data: map[string]interface{}{
+				"sponsor": savedSponsor,
+			},
+		})
+	}
 
 	// Check if we passed in any members of the sponsorship team
 	//var members []Member
@@ -341,8 +539,10 @@ func main() {
 	// Route handles and endpoints
 	router.HandleFunc("/sponsor-service/v1/event/{id}", getEvent).Methods("GET")
 	router.HandleFunc("/sponsor-service/v1/event", createEvent).Methods("POST")
+	router.HandleFunc("/sponsor-service/v1/event/{event_id}/level", createLevel).Methods("POST")
 	//router.HandleFunc("/sponsor/{event}", getSponsorsForEvent).Methods("GET")       // show a list of sponsor organization names and each sponsor's level for an event
 	router.HandleFunc("/sponsor-service/v1/event/{event_id}/sponsor", createSponsor).Methods("POST") // create a sponsor at a specific level
+	router.HandleFunc("/sponsor-service/v1/event/{event_id}/sponsor/{sponsor_id}/member", createMember).Methods("POST")
 	//router.HandleFunc("/sponsor/{id}", updateSponsor).Methods("PUT") // add people on the sponsors team
 	//router.HandleFunc("/sponsor/{id}", removeSponsor).Methods("DELETE") // remove people on the sponsors team
 

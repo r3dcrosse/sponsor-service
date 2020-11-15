@@ -60,3 +60,98 @@ docker run -p 1337:8000 \
   -it sponsor-service
 ```
 Feel free to replace port 1337 with whatever port you want to run this service on
+
+## Optional steps to fill this microservice with data
+
+Note: This kinda does need to be done in this exact order
+
+```
+POST /sponsor-service/v1/event
+{
+  name: "My Event",
+}
+
+// JSON Response
+{
+    "success": true,
+    "data": {
+        "event": {
+            "id": 1,
+            "name": "My Event",
+            "levels": null,
+            "sponsors": null
+        }
+    }
+}
+```
+
+Use the ID returned to create a sponsor with a level for an event
+```
+POST /sponsor-service/v1/event/1/sponsor
+{
+    "name": "Doge Company",
+    "level": {
+        "name": "Diamond+",
+        "cost": "$250K",
+        "maxSponsors": 1,
+        "maxFreeBadgesPerSponsor": 25
+    }
+}
+
+// JSON Response
+{
+    "success": true,
+    "data": {
+        "sponsor": {
+            "event": "My Event",
+            "eventId": 1,
+            "name": "Doge Company",
+            "level": {
+                "eventId": 1,
+                "name": "Diamond+",
+                "cost": "$250K",
+                "maxSponsors": 1,
+                "maxFreeBadgesPerSponsor": 25,
+                "id": 1
+            },
+            "members": null,
+            "id": 1
+        }
+    }
+}
+```
+Use the ID returned to create a member
+```
+POST /sponsor-service/v1/event/1/sponsor/1/member
+{
+    "name": "Daviddd",
+    "email": "david@david.com"
+}
+
+// JSON Response
+{
+    "success": true,
+    "data": {
+        "member": {
+            "name": "Daviddd",
+            "email": "david@david.com",
+            "id": 1,
+            "sponsorId": 1
+        }
+    }
+}
+```
+
+At this point, you should have also noticed a rabbitMQ message sent on the channel: `sponsor.member.created`
+```
+{
+    "email":"david@david.com",
+    "eventId":1,
+    "eventName":"My Event",
+    "id":1,
+    "name":"Daviddd",
+    "organization":"Doge Company",
+    "sponsorId":1,
+    "sponsorLevel":"Diamond+"
+}
+```

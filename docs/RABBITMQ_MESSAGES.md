@@ -17,15 +17,25 @@ This will publish a JSON message to the channel: `sponsor.member.created` with t
 {
     "id": 1337,
     "name": "Firstname Lastname",
-    "email": "first.last@doge.com"
+    "email": "first.last@doge.com",
+    "eventName": "JSconf EU",
+    "eventId": 123,
+    "organization": "Doge Company",
+    "sponsorId": 321,
+    "sponsorLevel": "Diamond+ Extra"
 }
 ```
 
 ### The shape explained
 ```
 {
-    "id": 1337, // The ID the sponsor service uses to identify a member
-    "name": "Firstname Lastname", // Their name
-    "email": "first.last@doge.com" // Their email
+    "id": 1337, // ID the sponsor service uses to keep track of the member that was created
+    "name": "Firstname Lastname",
+    "email": "first.last@doge.com",
+    "eventName": "JSconf EU",
+    "eventId": 123, // Event ID the sponsor service uses to keep track of the event
+    "organization": "Doge Company",
+    "sponsorId": 321, // Sponsor ID the sponsor service uses to keep track of the sponsoring organization
+    "sponsorLevel": "Diamond+ Extra"
 }
 ```
