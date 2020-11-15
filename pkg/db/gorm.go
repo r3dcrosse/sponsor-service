@@ -9,9 +9,9 @@ import (
 
 type Level struct {
 	gorm.Model
-	ID                    int
+	ID                    int `gorm:"primary_key"`
 	EventID               int
-	Name                  string `gorm:"column:level_name"`
+	Name                  string
 	Cost                  string
 	MaxNumberOfSponsors   int
 	MaxNumberOfFreeBadges int
@@ -19,26 +19,28 @@ type Level struct {
 
 type Member struct {
 	gorm.Model
-	ID        int
+	ID        int `gorm:"primary_key"`
 	Name      string
 	Email     string
 	SponsorID int
+	EventID   int
 }
 
 type Sponsor struct {
 	gorm.Model
-	ID      int
-	EventID int
-	Name    string
-	LevelID int
-	Level   Level
-	Members []Member
+	ID        int `gorm:"primary_key"`
+	EventID   int
+	Name      string
+	LevelID   int
+	LevelName string
+	Level     Level
+	Members   []Member
 }
 
 type Event struct {
 	gorm.Model
-	ID       int
-	Name     string `gorm:"column:event_name"`
+	ID       int `gorm:"primary_key"`
+	Name     string
 	Levels   []Level
 	Sponsors []Sponsor
 }
@@ -81,16 +83,32 @@ func CreateLevel(name string, cost string, maxNumSponsors int, maxNumBadges int,
 	}
 	Database.Create(&level)
 
+	event := Event{}
+	// Get Levels array from Event and update it
+	Database.First(&event, eventId)
+	event.Levels = append(event.Levels, level)
+	Database.Save(&event)
+
 	return &level
 }
 
 func CreateSponsorWithLevel(name string, levelId int, eventId int) *Sponsor {
+	level := Level{}
+	Database.First(&level, levelId)
+
 	sponsor := Sponsor{
-		Name:    name,
-		EventID: eventId,
-		LevelID: levelId,
+		Name:      name,
+		EventID:   eventId,
+		LevelID:   levelId,
+		LevelName: level.Name,
+		Level:     level,
 	}
 	Database.Create(&sponsor)
+
+	event := Event{}
+	Database.First(&event, eventId)
+	event.Sponsors = append(event.Sponsors, sponsor)
+	Database.Save(&event)
 
 	return &sponsor
 }
@@ -101,6 +119,12 @@ func CreateSponsor(name string, eventId int) *Sponsor {
 		EventID: eventId,
 	}
 	Database.Create(&sponsor)
+
+	event := Event{}
+	// Get Sponsors array from event and update it
+	Database.First(&event, eventId)
+	event.Sponsors = append(event.Sponsors, sponsor)
+	Database.Save(&event)
 
 	return &sponsor
 }
@@ -123,6 +147,24 @@ func GetEvent(id int) (*Event, error) {
 		error = gorm.ErrRecordNotFound
 	}
 	return &event, error
+}
+
+func GetAllEvents() *[]Event {
+	var events []Event
+	Database.Find(&events)
+
+	for i, _ := range events {
+		var levels []Level
+		var sponsors []Sponsor
+
+		Database.Where(&Level{EventID: events[i].ID}).Find(&levels)
+		Database.Where(&Sponsor{EventID: events[i].ID}).Find(&sponsors)
+
+		events[i].Sponsors = sponsors
+		events[i].Levels = levels
+	}
+
+	return &events
 }
 
 func CreateEvent(name string) *Event {

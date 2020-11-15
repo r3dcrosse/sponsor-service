@@ -478,6 +478,66 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Get all events
+// Get an event
+func getAllEvents(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	results := db.GetAllEvents()
+	//if err != nil {
+	//	w.WriteHeader(http.StatusBadRequest)
+	//	json.NewEncoder(w).Encode(HttpErrorJSON{
+	//		Success: false,
+	//		Error: map[string]interface{}{
+	//			"error": map[string]interface{}{
+	//				"message": err.Error(),
+	//			},
+	//		},
+	//	})
+	//	return
+	//}
+
+	var events []Event
+	for _, result := range *results {
+		levels := []Level{}
+		for _, level := range result.Levels {
+			levels = append(levels, Level{
+				EventID:                 level.EventID,
+				Id:                      level.ID,
+				MaxFreeBadgesPerSponsor: level.MaxNumberOfFreeBadges,
+				MaxSponsors:             level.MaxNumberOfSponsors,
+				Cost:                    level.Cost,
+				Name:                    level.Name,
+			})
+		}
+
+		sponsors := []Sponsor{}
+		for _, sponsor := range result.Sponsors {
+			sponsors = append(sponsors, Sponsor{
+				Name:    sponsor.Name,
+				Id:      sponsor.ID,
+				EventID: sponsor.EventID,
+				Level: Level{
+					Name: sponsor.Level.Name,
+				},
+			})
+		}
+
+		events = append(events, Event{
+			Id:       result.ID,
+			Sponsors: sponsors,
+			Levels:   levels,
+		})
+	}
+
+	json.NewEncoder(w).Encode(HttpResponseJSON{
+		Success: true,
+		Data: map[string]interface{}{
+			"events": events,
+		},
+	})
+}
+
 // To create an event
 func createEvent(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -537,6 +597,7 @@ func main() {
 	router := mux.NewRouter()
 
 	// Route handles and endpoints
+	router.HandleFunc("/sponsor-service/v1/events", getAllEvents).Methods("GET")
 	router.HandleFunc("/sponsor-service/v1/event/{id}", getEvent).Methods("GET")
 	router.HandleFunc("/sponsor-service/v1/event", createEvent).Methods("POST")
 	router.HandleFunc("/sponsor-service/v1/event/{event_id}/level", createLevel).Methods("POST")
