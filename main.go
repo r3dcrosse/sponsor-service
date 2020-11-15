@@ -314,13 +314,26 @@ func failOnError(err error, msg string) {
 func main() {
 	// Get any cmd line args passed to this service
 	rabbitMQip := flag.String("rabbit", "localhost:5672", "IP Address and port where rabbitMQ is running")
+	postgresIp := flag.String("pg_ip", "localhost", "IP Address where postgres is running")
+	postgresPort := flag.String("pg_port", "5432", "Port where postgres is running")
+	postgresUser := flag.String("pg_user", "user", "User to use to login to postgres")
+	postgresPass := flag.String("pg_password", "hey", "Password to use to login to postgres")
+	postgresDbName := flag.String("pg_dbname", "postgres", "The db name to connect to")
+	postgresSSL := flag.String("pg_ssl", "disable", "Run with ssl mode?")
 	flag.Parse()
 
 	// Initialize RabbitMQ
 	messaging.ConnectToRabbitMQ(*rabbitMQip)
 
 	//initializeDb()
-	db.InitDB()
+	db.InitDB(db.Creds{
+		Host:     *postgresIp,
+		Port:     *postgresPort,
+		User:     *postgresUser,
+		Password: *postgresPass,
+		Dbname:   *postgresDbName,
+		Sslmode:  *postgresSSL,
+	})
 
 	// Initialize the router
 	router := mux.NewRouter()

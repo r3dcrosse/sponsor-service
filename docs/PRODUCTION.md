@@ -45,7 +45,18 @@ Note: you must know what IP and port rabbitMQ is running on because you
 will pass those in as an argument when running the docker image.
 
 In this example, my IP where rabbitMQ is running is: "192.168.1.24:5672"
+
+Note: You must also know what IP and port postgres is running on, as well as the postgres user, password, dbname, and if
+you want ssl enabled or not...
 ```
-docker run -p 1337:8000 -e RABBITMQ_IP="192.168.1.24:5672" -it sponsor-service
+docker run -p 1337:8000 \
+  -e RABBITMQ_IP="192.168.1.24:5672" \
+  -e PG_IP="192.168.1.24" \
+  -e PG_PORT="5432" \
+  -e PG_USER="user" \
+  -e PG_PASS="PasswordYouUsedGoesHere" \
+  -e PG_DB_NAME="postgres" \
+  -e PG_SSL="disable" \
+  -it sponsor-service
 ```
 Feel free to replace port 1337 with whatever port you want to run this service on
