@@ -69,3 +69,38 @@ func (m *RabbitMQClient) SendOnQueue(body []byte, queueName string) error {
 
 	return err
 }
+
+func (m *RabbitMQClient) SubscribeToQueue(queueName string, consumerName string, handlerFunc func(delivery amqp.Delivery)) error {
+	ch, err := m.connection.Channel()
+	failOnError(err, "Failed to open a channel")
+
+	q, err := ch.QueueDeclare(
+		queueName, // name
+		false,     // durable
+		false,     // delete when unused
+		false,     // exclusive
+		false,     // no-wait
+		nil,       // arguments
+	)
+	failOnError(err, "Failed to register a Queue")
+
+	msgs, err := ch.Consume(
+		q.Name,       // queue
+		consumerName, // consumer
+		true,         // auto ack
+		false,        // exclusive
+		false,        // no-local
+		false,        // no-wait
+		nil,          // args
+	)
+	failOnError(err, "Failed to register a consumer")
+
+	go consumeLoop(msgs, handlerFunc)
+	return nil
+}
+
+func consumeLoop(deliveries <-chan amqp.Delivery, handlerFunc func(d amqp.Delivery)) {
+	for d := range deliveries {
+		handlerFunc(d)
+	}
+}

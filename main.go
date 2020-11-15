@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/r3dcrosse/sponsor-service/pkg/messaging"
+	"github.com/streadway/amqp"
 	"log"
 	"net/http"
 	"strconv"
@@ -553,6 +554,17 @@ func removeMember(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Callback functions for everytime we get a message from rabbit mq
+func onEventCreatedMessage(delivery amqp.Delivery) {
+	// @todo: Implement handling parsing message and creating an event from the message
+	fmt.Printf("Got this message from event.create: %v\n", string(delivery.Body))
+}
+
+func onEventModifiedMessage(delivery amqp.Delivery) {
+	// @todo: Implement handling parsing message and modifying an event from the message
+	fmt.Printf("Got this message from event.modify: %v\n", string(delivery.Body))
+}
+
 func failOnError(err error, msg string) {
 	if err != nil {
 		log.Fatalf("%s: %s", msg, err)
@@ -572,6 +584,11 @@ func main() {
 
 	// Initialize RabbitMQ
 	messaging.Client.ConnectToRabbitMQ(*rabbitMQip)
+	err := messaging.Client.SubscribeToQueue("event.create", "sponsor-service", onEventCreatedMessage)
+	failOnError(err, "Could not subscribe to channel event.create")
+
+	err = messaging.Client.SubscribeToQueue("event.modify", "sponsor-service", onEventModifiedMessage)
+	failOnError(err, "Could not subscribe to channel event.modify")
 
 	//initializeDb()
 	db.InitDB(db.Creds{
