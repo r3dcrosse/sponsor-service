@@ -505,6 +505,54 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func removeMember(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	params := mux.Vars(r) // Gets params
+	_, err := strconv.Atoi(params["event_id"])
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(HttpErrorJSON{
+			Success: false,
+			Error: map[string]interface{}{
+				"message": "Could not parse event ID from URL",
+			},
+		})
+		return
+	}
+	_, err = strconv.Atoi(params["sponsor_id"])
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(HttpErrorJSON{
+			Success: false,
+			Error: map[string]interface{}{
+				"message": "Could not parse the sponsor ID from URL",
+			},
+		})
+		return
+	}
+
+	_, err = strconv.Atoi(params["member_id"])
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(HttpErrorJSON{
+			Success: false,
+			Error: map[string]interface{}{
+				"message": "Could not parse the member ID from URL",
+			},
+		})
+		return
+	}
+
+	w.WriteHeader(http.StatusNotImplemented)
+	json.NewEncoder(w).Encode(HttpResponseJSON{
+		Success: true,
+		Data: map[string]interface{}{
+			"message": "so sorry, this isn't implemented yet...",
+		},
+	})
+}
+
 func failOnError(err error, msg string) {
 	if err != nil {
 		log.Fatalf("%s: %s", msg, err)
@@ -546,8 +594,7 @@ func main() {
 	//router.HandleFunc("/sponsor/{event}", getSponsorsForEvent).Methods("GET")       // show a list of sponsor organization names and each sponsor's level for an event
 	router.HandleFunc("/sponsor-service/v1/event/{event_id}/sponsor", createSponsor).Methods("POST") // create a sponsor at a specific level
 	router.HandleFunc("/sponsor-service/v1/event/{event_id}/sponsor/{sponsor_id}/member", createMember).Methods("POST")
-	//router.HandleFunc("/sponsor/{id}", updateSponsor).Methods("PUT") // add people on the sponsors team
-	//router.HandleFunc("/sponsor/{id}", removeSponsor).Methods("DELETE") // remove people on the sponsors team
+	router.HandleFunc("/sponsor-service/v1/event/{event_id}/sponsor/{sponsor_id}/member/{member_id}", removeMember).Methods("DELETE")
 
 	// Start server
 	log.Fatal(http.ListenAndServe(":8000", router))
