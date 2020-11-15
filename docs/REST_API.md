@@ -19,6 +19,23 @@ GET /sponsor-service/v1/events
 }
 ```
 
+## POST /sponsor-service/v1/event
+Creates an event
+```
+POST /sponsor-service/v1/event
+{
+  name: "DEFCON",
+}
+
+// Example JSON response:
+{
+  "success": true,
+  "data": {
+    "event": { "id": 1, "name": "DEFCON" }
+  } 
+}
+```
+
 
 ## GET /sponsor-service/v1/event/{event_id}
 Returns a list of sponsor organization names and each sponsor's level for an event.

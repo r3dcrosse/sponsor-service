@@ -25,3 +25,4 @@ Think of it as a sort of bibliography or documentation of sources?
 ## Postgres
 * [Running postgres in docker](https://hub.docker.com/_/postgres)
 * [Local development with postgres in docker](https://towardsdatascience.com/local-development-set-up-of-postgresql-with-docker-c022632f13ea)
+* [go-pg - postgres ORM for Go](https://pg.uptrace.dev/)

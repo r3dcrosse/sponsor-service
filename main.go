@@ -7,10 +7,11 @@ import (
 	"github.com/streadway/amqp"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
+	"github.com/r3dcrosse/sponsor-service/pkg/db"
 )
-
 
 //////////////////////////////////////////////////////////////
 //
@@ -20,6 +21,8 @@ import (
 // Sponsor struct
 type Sponsor struct {
 	Event   string   `json:"event"`
+	EventID int      `json:"event_id"`
+	Name    string   `json:"name"`
 	Level   Level    `json:"level"`
 	Members []Member `json:"members"`
 	Id      int      `json:"id"`
@@ -30,7 +33,7 @@ type Level struct {
 	Name           string `json:"name"`
 	Cost           string `json:"cost"`
 	NumberOfBadges int    `json:"number_of_badges"`
-	Id int `json:"id"`
+	Id             int    `json:"id"`
 }
 
 // Team Member struct (team members part of a sponsor)
@@ -47,10 +50,22 @@ type Member struct {
 //////////////////////////////////////////////////////////////
 // Event struct
 type Event struct {
-	Id int
-	Name     string
-	Levels   []Level
-	Sponsors []Sponsor
+	Id       int       `json:"id"`
+	Name     string    `json:"name"`
+	Levels   []Level   `json:"levels"`
+	Sponsors []Sponsor `json:"sponsors"`
+}
+
+// HttpResponse JSON struct
+type HttpResponseJSON struct {
+	Success bool                   `json:"success"`
+	Data    map[string]interface{} `json:"data"`
+}
+
+// HttpError JSON struct
+type HttpErrorJSON struct {
+	Success bool                   `json:"success"`
+	Error   map[string]interface{} `json:"error"`
 }
 
 // RabbitMQ Interface for connecting, sending and receiving rabbit mq messages
@@ -83,7 +98,6 @@ func (m *RabbitMQClient) SendOnQueue(body []byte, queueName string) error {
 	ch, err := m.connection.Channel()
 	defer ch.Close()
 
-
 	q, err := ch.QueueDeclare(
 		queueName, // name
 		false,     // durable
@@ -110,31 +124,28 @@ func (m *RabbitMQClient) SendOnQueue(body []byte, queueName string) error {
 }
 
 // Initialize data
-var events []Event
-var sponsors []Sponsor
-
 var messaging RabbitMQClient
 
 // Get a list of sponsor organization names and each sponsor's level for an event
-func getSponsorsForEvent(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	params := mux.Vars(r) // Gets params
-
-	// Looping through events to find the one from our request
-	for _, event := range events {
-		if event.Name == params["event"] {
-			json.NewEncoder(w).Encode(event)
-			return
-		}
-	}
-
-	// Return an empty event if none is found
-	json.NewEncoder(w).Encode(&Event{
-		Name:     "",
-		Levels:   nil,
-		Sponsors: nil,
-	})
-}
+//func getSponsorsForEvent(w http.ResponseWriter, r *http.Request) {
+//	w.Header().Set("Content-Type", "application/json")
+//	params := mux.Vars(r) // Gets params
+//
+//	// Looping through events to find the one from our request
+//	for _, event := range events {
+//		if event.Name == params["event"] {
+//			json.NewEncoder(w).Encode(event)
+//			return
+//		}
+//	}
+//
+//	// Return an empty event if none is found
+//	json.NewEncoder(w).Encode(&Event{
+//		Name:     "",
+//		Levels:   nil,
+//		Sponsors: nil,
+//	})
+//}
 
 // To create a member of a sponsor team
 func createMember(m Member) Member {
@@ -142,6 +153,10 @@ func createMember(m Member) Member {
 	email := m.Email
 
 	// @todo: create this member in the DB and get/set the ID for it
+	db.CreateMember(struct {
+		Name  string
+		Email string
+	}{Name: m.Name, Email: m.Email})
 	id := 1337
 	m.Id = id
 	fmt.Printf("Trying to create member: %s with email: %s and id: %d\n", name, email, id)
@@ -166,32 +181,128 @@ func createMember(m Member) Member {
 // To create a sponsor
 func createSponsor(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	var sponsor Sponsor
-	err := json.NewDecoder(r.Body).Decode(&sponsor)
+	params := mux.Vars(r) // Gets params
+	eventId, err := strconv.Atoi(params["event_id"])
+	fmt.Printf("USING EVENT ID: %d", eventId)
+	event, err := db.GetEvent(eventId)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(HttpErrorJSON{
+			Success: false,
+			Error: map[string]interface{}{
+				"error": map[string]interface{}{
+					"message": err.Error(),
+				},
+			},
+		})
+		return
+	}
+
+	sponsor := Sponsor{
+		Event: event.Name,
+	}
+	err = json.NewDecoder(r.Body).Decode(&sponsor)
+	if err != nil {
+		fmt.Println(err)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(HttpErrorJSON{
+			Success: false,
+			Error: map[string]interface{}{
+				"error": map[string]interface{}{
+					"message": err.Error(),
+				},
+			},
+		})
+		return
+	}
+
+	result := db.CreateSponsor(sponsor.Name, event.ID)
+	savedSponsor := Sponsor{
+		Id:      result.ID,
+		Name:    result.Name,
+		Event:   event.Name,
+		EventID: event.ID,
+	}
+
+	json.NewEncoder(w).Encode(HttpResponseJSON{
+		Success: true,
+		Data: map[string]interface{}{
+			"sponsor": savedSponsor,
+		},
+	})
+
+	// Check if we passed in any members of the sponsorship team
+	//var members []Member
+	//if len(sponsor.Members) > 0 {
+	//	for _, member := range sponsor.Members {
+	//		createdMember := createMember(member)
+	//		members = append(members, createdMember)
+	//	}
+	//
+	//	sponsor.Members = members
+	//}
+	//
+	//sponsors = append(sponsors, sponsor)
+	//json.NewEncoder(w).Encode(sponsor)
+}
+
+// Get an event
+func getEvent(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(r) // Gets params
+	id, err := strconv.Atoi(params["id"])
+	if err != nil {
+		failOnError(err, "Could not parse event ID from URL")
+	}
+
+	result, err := db.GetEvent(id)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(HttpErrorJSON{
+			Success: false,
+			Error: map[string]interface{}{
+				"error": map[string]interface{}{
+					"message": err.Error(),
+				},
+			},
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(HttpResponseJSON{
+		Success: true,
+		Data: map[string]interface{}{
+			"event": &Event{
+				Id:   result.ID,
+				Name: result.Name,
+			},
+		},
+	})
+}
+
+// To create an event
+func createEvent(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var event Event
+	err := json.NewDecoder(r.Body).Decode(&event)
 	if err != nil {
 		fmt.Println(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// @todo: create this sponsor in the DB and get/set the ID for it
-	id := 1337
-	sponsor.Id = id
-	fmt.Printf("Trying to create sponsor for event: %s at level: %s and id: %d\n", sponsor.Event, sponsor.Level, id)
-
-	// Check if we passed in any members of the sponsorship team
-	var members []Member
-	if len(sponsor.Members) > 0 {
-		for _, member := range sponsor.Members {
-			createdMember := createMember(member)
-			members = append(members, createdMember)
-		}
-
-		sponsor.Members = members
+	result := db.CreateEvent(event.Name)
+	savedEvent := Event{
+		Id:   result.ID,
+		Name: result.Name,
 	}
 
-	sponsors = append(sponsors, sponsor)
-	json.NewEncoder(w).Encode(sponsor)
+	json.NewEncoder(w).Encode(HttpResponseJSON{
+		Success: true,
+		Data: map[string]interface{}{
+			"event": savedEvent,
+		},
+	})
 }
 
 func failOnError(err error, msg string) {
@@ -207,16 +318,18 @@ func main() {
 
 	// Initialize RabbitMQ
 	messaging.ConnectToRabbitMQ(*rabbitMQip)
-	//messaging.Subscribe("", "topic", "sponsor-service", "")
+
+	//initializeDb()
+	db.InitDB()
 
 	// Initialize the router
 	router := mux.NewRouter()
 
-	// Hardcoded data - @todo: add database
-
 	// Route handles and endpoints
-	router.HandleFunc("/sponsor/{event}", getSponsorsForEvent).Methods("GET")       // show a list of sponsor organization names and each sponsor's level for an event
-	router.HandleFunc("/sponsor-service/v1/sponsor", createSponsor).Methods("POST") // create a sponsor at a specific level
+	router.HandleFunc("/sponsor-service/v1/event/{id}", getEvent).Methods("GET")
+	router.HandleFunc("/sponsor-service/v1/event", createEvent).Methods("POST")
+	//router.HandleFunc("/sponsor/{event}", getSponsorsForEvent).Methods("GET")       // show a list of sponsor organization names and each sponsor's level for an event
+	router.HandleFunc("/sponsor-service/v1/event/{event_id}/sponsor", createSponsor).Methods("POST") // create a sponsor at a specific level
 	//router.HandleFunc("/sponsor/{id}", updateSponsor).Methods("PUT") // add people on the sponsors team
 	//router.HandleFunc("/sponsor/{id}", removeSponsor).Methods("DELETE") // remove people on the sponsors team
 
