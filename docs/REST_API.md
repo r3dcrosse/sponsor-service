@@ -69,6 +69,47 @@ GET /sponsor-service/v1/event/1337
 }
 ```
 
+## POST /sponsor-service/v1/event/{event_id}/level
+Creates a specific sponsorship level for an event
+
+You must pass an event_id that exists in the sponsor service, otherwise you'll get an error.
+```
+// Example 1
+POST /sponsor-service/v1/event/1/level
+{
+  "name": "Diamond",
+  "cost": "$250K",
+  "maxSponsors": 1,
+  "maxFreeBadgesPerSponsor": 25
+}
+
+// JSON response:
+{
+  "success": true,
+  "data": {
+    "level": {
+      "eventId": 1,
+      "eventName": "DEFCON",
+      "name": "Diamond",
+      "cost": "$250K",
+      "maxSponsors": 1,
+      "maxFreeBadgesPerSponsor": 25
+    }
+  }
+}
+
+// Example 2 (getting an event ID that does not exist)
+GET /sponsor-service/v1/event/1337
+
+// JSON response:
+{
+  "success": false,
+  "error": { 
+    "message": "Event does not exist"
+  }
+}
+```
+
 ## POST /sponsor-service/v1/event/{event_id}/sponsor
 Creates a sponsor at a specific level, for a particular event id
 
