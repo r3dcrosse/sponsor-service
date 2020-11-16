@@ -4,14 +4,14 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/gorilla/mux"
+	"github.com/r3dcrosse/sponsor-service/pkg/db"
 	"github.com/r3dcrosse/sponsor-service/pkg/messaging"
 	"github.com/streadway/amqp"
 	"log"
 	"net/http"
 	"strconv"
-
-	"github.com/gorilla/mux"
-	"github.com/r3dcrosse/sponsor-service/pkg/db"
+	"strings"
 )
 
 //////////////////////////////////////////////////////////////
@@ -58,6 +58,17 @@ type Event struct {
 	Name     string    `json:"name"`
 	Levels   []Level   `json:"levels"`
 	Sponsors []Sponsor `json:"sponsors"`
+}
+
+type LevelMessage struct {
+	Name          string `json:"name"`
+	Cost          int    `json:"cost"`
+	MaxFreeBadges int    `json:"freeBadges"`
+}
+
+type EventMessage struct {
+	Name          string         `json:"name"`
+	SponsorLevels []LevelMessage `json:"sponsors"`
 }
 
 // HttpResponse JSON struct
@@ -468,6 +479,7 @@ func getAllEvents(w http.ResponseWriter, r *http.Request) {
 
 		events = append(events, Event{
 			Id:       result.ID,
+			Name:     result.Name,
 			Sponsors: sponsors,
 			Levels:   levels,
 		})
@@ -556,8 +568,47 @@ func removeMember(w http.ResponseWriter, r *http.Request) {
 
 // Callback functions for everytime we get a message from rabbit mq
 func onEventCreatedMessage(delivery amqp.Delivery) {
-	// @todo: Implement handling parsing message and creating an event from the message
-	fmt.Printf("Got this message from event.create: %v\n", string(delivery.Body))
+	msg := string(delivery.Body)
+
+	fmt.Printf("Got this message from event.create: %v\n", msg)
+
+	// Format of the message will come in this shape:
+	/*
+
+		"
+		EVENT CREATED ::: {
+		  "name": "Super Awesome Event",
+		  "sponsors": [
+		    {
+		      "name": "Platinum",
+		      "cost": 14500,
+		      "freeBadges": 10
+		    }
+		  ]
+		}
+		"
+
+	*/
+
+	// Split the delivery body on " ::: "
+	s := strings.SplitAfter(msg, " ::: ")[1]
+	dat := EventMessage{}
+	if err := json.Unmarshal([]byte(s), &dat); err != nil {
+		failOnError(err, "Could not parse new event json from rabbitmq message")
+	}
+
+	// Save the event in the DB
+	savedEvent := db.CreateEvent(dat.Name)
+
+	for _, l := range dat.SponsorLevels {
+		level := Level{
+			Name:                    l.Name,
+			Cost:                    fmt.Sprintf("%d", l.Cost),
+			MaxFreeBadgesPerSponsor: l.MaxFreeBadges,
+		}
+
+		db.CreateLevel(level.Name, level.Cost, level.MaxSponsors, level.MaxFreeBadgesPerSponsor, savedEvent.ID)
+	}
 }
 
 func onEventModifiedMessage(delivery amqp.Delivery) {
