@@ -67,6 +67,7 @@ type LevelMessage struct {
 }
 
 type EventMessage struct {
+	Id            int            `json:"id"`
 	Name          string         `json:"name"`
 	SponsorLevels []LevelMessage `json:"sponsors"`
 }
@@ -111,7 +112,7 @@ func createMember(w http.ResponseWriter, r *http.Request) {
 	eventId, err := strconv.Atoi(params["event_id"])
 
 	// Check if the event even exists
-	event, err := db.GetEvent(eventId)
+	event, err := db.GetEvent(eventId, -1)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(HttpErrorJSON{
@@ -224,7 +225,7 @@ func createLevel(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	params := mux.Vars(r) // Gets params
 	eventId, err := strconv.Atoi(params["event_id"])
-	event, err := db.GetEvent(eventId)
+	event, err := db.GetEvent(eventId, -1)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(HttpErrorJSON{
@@ -279,7 +280,7 @@ func createSponsor(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	params := mux.Vars(r) // Gets params
 	eventId, err := strconv.Atoi(params["event_id"])
-	event, err := db.GetEvent(eventId)
+	event, err := db.GetEvent(eventId, -1)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(HttpErrorJSON{
@@ -407,7 +408,7 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 		failOnError(err, "Could not parse event ID from URL")
 	}
 
-	result, err := db.GetEvent(id)
+	result, err := db.GetEvent(id, -1)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(HttpErrorJSON{
@@ -438,18 +439,6 @@ func getAllEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	results := db.GetAllEvents()
-	//if err != nil {
-	//	w.WriteHeader(http.StatusBadRequest)
-	//	json.NewEncoder(w).Encode(HttpErrorJSON{
-	//		Success: false,
-	//		Error: map[string]interface{}{
-	//			"error": map[string]interface{}{
-	//				"message": err.Error(),
-	//			},
-	//		},
-	//	})
-	//	return
-	//}
 
 	var events []Event
 	for _, result := range *results {
@@ -504,7 +493,13 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := db.CreateEvent(event.Name)
+	// When we create an event in the DB, we pass in two vars here
+	// First, the event name
+	// Then, the Event service ID. We hard code -1 in this case
+	// because events created through the REST API have no
+	// corresponding ID from the event service, because they don't
+	// exist in the event service
+	result := db.CreateEvent(event.Name, -1)
 	savedEvent := Event{
 		Id:   result.ID,
 		Name: result.Name,
@@ -683,18 +678,19 @@ func onEventCreatedMessage(delivery amqp.Delivery) {
 	// Format of the message will come in this shape:
 	/*
 
-		"
-		EVENT CREATED ::: {
-		  "name": "Super Awesome Event",
-		  "sponsors": [
-		    {
-		      "name": "Platinum",
-		      "cost": 14500,
-		      "freeBadges": 10
-		    }
-		  ]
-		}
-		"
+			"
+			EVENT CREATED ::: {
+		      "id": 1337,
+			  "name": "Super Awesome Event",
+			  "sponsors": [
+			    {
+			      "name": "Platinum",
+			      "cost": 14500,
+			      "freeBadges": 10
+			    }
+			  ]
+			}
+			"
 
 	*/
 
@@ -706,7 +702,7 @@ func onEventCreatedMessage(delivery amqp.Delivery) {
 	}
 
 	// Save the event in the DB
-	savedEvent := db.CreateEvent(dat.Name)
+	savedEvent := db.CreateEvent(dat.Name, dat.Id)
 
 	for _, l := range dat.SponsorLevels {
 		level := Level{
@@ -720,8 +716,84 @@ func onEventCreatedMessage(delivery amqp.Delivery) {
 }
 
 func onEventModifiedMessage(delivery amqp.Delivery) {
-	// @todo: Implement handling parsing message and modifying an event from the message
+	msg := string(delivery.Body)
+
 	fmt.Printf("Got this message from event.modify: %v\n", string(delivery.Body))
+
+	// Format of the message will come in this shape:
+	/*
+
+			"
+			EVENT UPDATED ::: {
+		      "id": 1337,
+			  "name": "Super Awesome Event",
+			  "sponsors": [
+			    {
+			      "name": "Platinum",
+			      "cost": 14500,
+			      "freeBadges": 10
+			    }
+			  ]
+			}
+			"
+
+	*/
+
+	// Split the delivery body on " ::: "
+	s := strings.SplitAfter(msg, " ::: ")[1]
+	dat := EventMessage{}
+	if err := json.Unmarshal([]byte(s), &dat); err != nil {
+		failOnError(err, "Could not parse new event json from rabbitmq message")
+	}
+
+	// fetch the item in the DB
+	// We send in -1 as our service ID since the event already
+	// has an ID from the events service
+	result, err := db.GetEvent(-1, dat.Id)
+	if err != nil {
+		failOnError(err, "Could not find the event to update based on the event ID")
+	}
+
+	var levels []Level
+	var sponsors []Sponsor
+	event := Event{
+		Id:       result.ID,
+		Name:     dat.Name,
+		Levels:   levels,
+		Sponsors: sponsors,
+	}
+
+	if result.Levels != nil {
+		for _, l := range result.Levels {
+			levels = append(levels, Level{
+				Id:                      l.ID,
+				EventID:                 l.EventID,
+				Cost:                    l.Cost,
+				Name:                    l.Name,
+				MaxFreeBadgesPerSponsor: l.MaxNumberOfFreeBadges,
+				MaxSponsors:             l.MaxNumberOfSponsors,
+			})
+		}
+	}
+
+	if dat.SponsorLevels != nil {
+		for _, l := range dat.SponsorLevels {
+			level := Level{
+				Name:                    l.Name,
+				Cost:                    fmt.Sprintf("%d", l.Cost),
+				MaxFreeBadgesPerSponsor: l.MaxFreeBadges,
+			}
+
+			result := db.CreateLevel(level.Name, level.Cost, level.MaxSponsors, level.MaxFreeBadgesPerSponsor, result.ID)
+			level.Id = result.ID
+			level.EventID = result.EventID
+			level.MaxSponsors = result.MaxNumberOfSponsors
+
+			levels = append(levels, level)
+		}
+	}
+
+	db.UpdateEvent(result.ID, event.Name)
 }
 
 func failOnError(err error, msg string) {

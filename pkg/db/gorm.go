@@ -39,10 +39,11 @@ type Sponsor struct {
 
 type Event struct {
 	gorm.Model
-	ID       int `gorm:"primary_key"`
-	Name     string
-	Levels   []Level
-	Sponsors []Sponsor
+	ID             int `gorm:"primary_key"`
+	EventServiceID int
+	Name           string
+	Levels         []Level
+	Sponsors       []Sponsor
 }
 
 func initialMigration(db *gorm.DB) {
@@ -152,13 +153,32 @@ func GetSponsor(id int) (*Sponsor, error) {
 	return &sponsor, error
 }
 
-func GetEvent(id int) (*Event, error) {
+func GetEvent(id int, eventServiceId int) (*Event, error) {
+	var levels []Level
+	var sponsors []Sponsor
 	var event Event
 	var error error
-	err := Database.First(&event, id)
-	if errors.Is(err.Error, gorm.ErrRecordNotFound) {
-		error = gorm.ErrRecordNotFound
+
+	idToUse := id
+	if idToUse == -1 {
+		idToUse = eventServiceId
+		err := Database.Where(&Event{EventServiceID: idToUse}).First(&event)
+		if errors.Is(err.Error, gorm.ErrRecordNotFound) {
+			error = gorm.ErrRecordNotFound
+		}
+	} else {
+		idToUse = id
+		err := Database.First(&event, idToUse)
+		if errors.Is(err.Error, gorm.ErrRecordNotFound) {
+			error = gorm.ErrRecordNotFound
+		}
 	}
+
+	Database.Where(&Level{EventID: id}).Find(&levels)
+	Database.Where(&Sponsor{EventID: id}).Find(&sponsors)
+	event.Sponsors = sponsors
+	event.Levels = levels
+
 	return &event, error
 }
 
@@ -202,9 +222,10 @@ func GetAllEvents() *[]Event {
 	return &events
 }
 
-func CreateEvent(name string) *Event {
+func CreateEvent(name string, eventId int) *Event {
 	var event Event
 	event.Name = name
+	event.EventServiceID = eventId
 	Database.Create(&event)
 
 	return &event
