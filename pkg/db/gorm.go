@@ -92,6 +92,19 @@ func CreateLevel(name string, cost string, maxNumSponsors int, maxNumBadges int,
 	return &level
 }
 
+func UpdateLevel(id int, name string, cost string, maxNumSponsors int, maxNumBadges int, eventId int) (*Level, error) {
+	var level Level
+	err := Database.First(&level, id)
+	level.Name = name
+	level.Cost = cost
+	level.MaxNumberOfSponsors = maxNumSponsors
+	level.MaxNumberOfFreeBadges = maxNumBadges
+	level.EventID = eventId
+	Database.Save(&level)
+
+	return &level, err.Error
+}
+
 func CreateSponsorWithLevel(name string, levelId int, eventId int) *Sponsor {
 	level := Level{}
 	Database.First(&level, levelId)
@@ -146,6 +159,28 @@ func GetEvent(id int) (*Event, error) {
 	if errors.Is(err.Error, gorm.ErrRecordNotFound) {
 		error = gorm.ErrRecordNotFound
 	}
+	return &event, error
+}
+
+func UpdateEvent(eventId int, eventName string) (*Event, error) {
+	var event Event
+	var levels []Level
+	var error error
+	err := Database.First(&event, eventId)
+	if errors.Is(err.Error, gorm.ErrRecordNotFound) {
+		error = gorm.ErrRecordNotFound
+	}
+
+	Database.Where(&Level{EventID: eventId}).Find(&levels)
+	if levels != nil {
+		event.Levels = levels
+	}
+
+	if err != nil {
+		event.Name = eventName
+		Database.Save(&event)
+	}
+
 	return &event, error
 }
 

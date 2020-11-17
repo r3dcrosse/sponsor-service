@@ -465,7 +465,7 @@ func getAllEvents(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 
-		sponsors := []Sponsor{}
+		var sponsors []Sponsor
 		for _, sponsor := range result.Sponsors {
 			sponsors = append(sponsors, Sponsor{
 				Name:    sponsor.Name,
@@ -508,6 +508,114 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 	savedEvent := Event{
 		Id:   result.ID,
 		Name: result.Name,
+	}
+
+	json.NewEncoder(w).Encode(HttpResponseJSON{
+		Success: true,
+		Data: map[string]interface{}{
+			"event": savedEvent,
+		},
+	})
+}
+
+func patchEvent(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	params := mux.Vars(r) // Gets params
+	id, err := strconv.Atoi(params["id"])
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(HttpErrorJSON{
+			Success: false,
+			Error: map[string]interface{}{
+				"error": map[string]interface{}{
+					"message": err.Error(),
+				},
+			},
+		})
+		return
+	}
+
+	var event Event
+	err = json.NewDecoder(r.Body).Decode(&event)
+	if err != nil {
+		fmt.Println(err)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(HttpErrorJSON{
+			Success: false,
+			Error: map[string]interface{}{
+				"error": map[string]interface{}{
+					"message": err.Error(),
+				},
+			},
+		})
+		return
+	}
+
+	result, err := db.UpdateEvent(id, event.Name)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(HttpErrorJSON{
+			Success: false,
+			Error: map[string]interface{}{
+				"error": map[string]interface{}{
+					"message":   err.Error(),
+					"more_info": "Could not find the event using the ID you passed in",
+				},
+			},
+		})
+		return
+	}
+	savedEvent := Event{
+		Id:   id,
+		Name: result.Name,
+	}
+
+	// Check if the savedEvent has any levels
+	if result.Levels != nil {
+		for _, l := range result.Levels {
+			savedEvent.Levels = append(savedEvent.Levels, Level{
+				Id:                      l.ID,
+				EventID:                 l.EventID,
+				Name:                    l.Name,
+				MaxSponsors:             l.MaxNumberOfSponsors,
+				MaxFreeBadgesPerSponsor: l.MaxNumberOfFreeBadges,
+				Cost:                    l.Cost,
+			})
+		}
+	}
+
+	// Check if event has levels to update
+	if event.Levels != nil {
+		for _, l := range event.Levels {
+			var savedLevel *db.Level
+			if l.Id == 0 {
+				savedLevel = db.CreateLevel(l.Name, l.Cost, l.MaxSponsors, l.MaxFreeBadgesPerSponsor, id)
+			} else {
+				savedLevel, err = db.UpdateLevel(l.Id, l.Name, l.Cost, l.MaxSponsors, l.MaxFreeBadgesPerSponsor, id)
+				if err != nil {
+					w.WriteHeader(http.StatusNotFound)
+					json.NewEncoder(w).Encode(HttpErrorJSON{
+						Success: false,
+						Error: map[string]interface{}{
+							"error": map[string]interface{}{
+								"message":   err.Error(),
+								"more_info": "Could not find the level using the level ID you passed in",
+							},
+						},
+					})
+					return
+				}
+			}
+			savedEvent.Levels = append(savedEvent.Levels, Level{
+				Id:                      savedLevel.ID,
+				Name:                    savedLevel.Name,
+				Cost:                    savedLevel.Cost,
+				MaxFreeBadgesPerSponsor: savedLevel.MaxNumberOfFreeBadges,
+				MaxSponsors:             savedLevel.MaxNumberOfSponsors,
+				EventID:                 savedLevel.EventID,
+			})
+		}
 	}
 
 	json.NewEncoder(w).Encode(HttpResponseJSON{
@@ -658,6 +766,7 @@ func main() {
 	router.HandleFunc("/sponsor-service/v1/events", getAllEvents).Methods("GET")
 	router.HandleFunc("/sponsor-service/v1/event/{id}", getEvent).Methods("GET")
 	router.HandleFunc("/sponsor-service/v1/event", createEvent).Methods("POST")
+	router.HandleFunc("/sponsor-service/v1/event/{id}", patchEvent).Methods("PATCH")
 	router.HandleFunc("/sponsor-service/v1/event/{event_id}/level", createLevel).Methods("POST")
 	//router.HandleFunc("/sponsor/{event}", getSponsorsForEvent).Methods("GET")       // show a list of sponsor organization names and each sponsor's level for an event
 	router.HandleFunc("/sponsor-service/v1/event/{event_id}/sponsor", createSponsor).Methods("POST") // create a sponsor at a specific level
