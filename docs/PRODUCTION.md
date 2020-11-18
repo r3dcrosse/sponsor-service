@@ -2,6 +2,11 @@
 
 You need Docker installed on your system to do this...
 
+# Start RabbitMQ
+```
+docker run -d --hostname mq --name mq -p 5672:5672 rabbitmq:3
+```
+
 # Set up postgres
 ## Get the latest postgres Docker image
 ```

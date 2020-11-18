@@ -2,8 +2,10 @@ package messaging
 
 import (
 	"fmt"
+	"github.com/r3dcrosse/sponsor-service/common/circuitbreaker"
 	"github.com/streadway/amqp"
 	"log"
+	"time"
 )
 
 // RabbitMQ Interface for connecting, sending and receiving rabbit mq messages
@@ -21,8 +23,17 @@ type RabbitMQClient struct {
 	connection *amqp.Connection
 }
 
-// Initialize data
-var Client RabbitMQClient
+func (m *RabbitMQClient) Send(msg []byte, exchangeName string, exchangeType string) error {
+	panic("implement me")
+}
+
+func (m *RabbitMQClient) Subscribe(exchangeName string, exchangeType string, consumerName string, handlerFunc func(delivery amqp.Delivery)) error {
+	panic("implement me")
+}
+
+func (m *RabbitMQClient) Close() {
+	panic("implement me")
+}
 
 func failOnError(err error, msg string) {
 	if err != nil {
@@ -33,11 +44,33 @@ func failOnError(err error, msg string) {
 // Function to connect to rabbit mq
 func (m *RabbitMQClient) ConnectToRabbitMQ(ip string) {
 	rabbitIP := fmt.Sprintf("amqp://guest:guest@%s/", ip)
-
 	var err error
-	m.connection, err = amqp.Dial(rabbitIP)
-	if err != nil {
-		failOnError(err, "Failed to connect to RabbitMQ at "+rabbitIP)
+
+	////////////////////////////////////////////////////////////////
+	// Attempt at Circuit breaker for connecting to rabbitmq
+	//
+	// Currently, this only works to handle going from:
+	//   - Sponsor service starts, rabbitMQ has not started yet
+	//   - Sponsor service waits for rabbitMQ to start
+	//   - rabbitMQ has started
+	//   - Sponsor service successfully connects
+	////////////////////////////////////////////////////////////////
+	for {
+		if circuitbreaker.CB.Ready() {
+			m.connection, err = amqp.Dial(rabbitIP)
+			if err != nil {
+				fmt.Printf("[%s] INFO: Could not find RabbitMQ at %s, will retry connecting | \n%s\n", time.Now(), rabbitIP, err.Error())
+				circuitbreaker.CB.Fail()
+				continue
+			} else {
+				fmt.Printf("[%s] INFO: Successfully connected to RabbitMQ at %s\n", time.Now(), rabbitIP)
+				circuitbreaker.CB.Success()
+				break
+			}
+		} else {
+			// Breaker is in a tripped state
+			//fmt.Printf("Failed to connect to RabbitMQ at %s, is it even up and running?\n", rabbitIP)
+		}
 	}
 }
 

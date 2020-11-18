@@ -5,8 +5,9 @@ import (
 	"flag"
 	"fmt"
 	"github.com/gorilla/mux"
-	"github.com/r3dcrosse/sponsor-service/pkg/db"
-	"github.com/r3dcrosse/sponsor-service/pkg/messaging"
+	"github.com/r3dcrosse/sponsor-service/common/circuitbreaker"
+	"github.com/r3dcrosse/sponsor-service/common/db"
+	"github.com/r3dcrosse/sponsor-service/common/messaging"
 	"github.com/streadway/amqp"
 	"log"
 	"net/http"
@@ -212,9 +213,9 @@ func createMember(w http.ResponseWriter, r *http.Request) {
 			"sponsorLevel": l.Name,
 		}
 		data, _ := json.Marshal(memberNotification)
-		err := messaging.Client.SendOnQueue(data, "sponsor.member.created")
+		err := messagingClient.SendOnQueue(data, "sponsor.member.created")
 		if err != nil {
-			failOnError(err, "Something went wrong when sending the message")
+			fmt.Printf("Something went wrong when sending the message to sponsor.member.created | %s", err.Error())
 		}
 	}(savedMember, eventId, level, sponsor)
 
@@ -405,7 +406,16 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r) // Gets params
 	id, err := strconv.Atoi(params["id"])
 	if err != nil {
-		failOnError(err, "Could not parse event ID from URL")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(HttpErrorJSON{
+			Success: false,
+			Error: map[string]interface{}{
+				"error": map[string]interface{}{
+					"message": err.Error(),
+				},
+			},
+		})
+		return
 	}
 
 	result, err := db.GetEvent(id, -1)
@@ -698,7 +708,8 @@ func onEventCreatedMessage(delivery amqp.Delivery) {
 	s := strings.SplitAfter(msg, " ::: ")[1]
 	dat := EventMessage{}
 	if err := json.Unmarshal([]byte(s), &dat); err != nil {
-		failOnError(err, "Could not parse new event json from rabbitmq message")
+		fmt.Printf("Could not parse new event json from rabbitmq message | %s", err)
+		return
 	}
 
 	// Save the event in the DB
@@ -743,7 +754,8 @@ func onEventModifiedMessage(delivery amqp.Delivery) {
 	s := strings.SplitAfter(msg, " ::: ")[1]
 	dat := EventMessage{}
 	if err := json.Unmarshal([]byte(s), &dat); err != nil {
-		failOnError(err, "Could not parse new event json from rabbitmq message")
+		fmt.Printf("Could not parse new event json from rabbitmq message | %s", err.Error())
+		return
 	}
 
 	// fetch the item in the DB
@@ -751,7 +763,8 @@ func onEventModifiedMessage(delivery amqp.Delivery) {
 	// has an ID from the events service
 	result, err := db.GetEvent(-1, dat.Id)
 	if err != nil {
-		failOnError(err, "Could not find the event to update based on the event ID")
+		fmt.Printf("Could not find the event to update based on the event ID | %s", err.Error())
+		return
 	}
 
 	var levels []Level
@@ -802,7 +815,11 @@ func failOnError(err error, msg string) {
 	}
 }
 
+var messagingClient messaging.IRabbitMQClient
+
 func main() {
+	circuitbreaker.InitCircuitBreaker()
+
 	// Get any cmd line args passed to this service
 	rabbitMQip := flag.String("rabbit", "localhost:5672", "IP Address and port where rabbitMQ is running")
 	postgresIp := flag.String("pg_ip", "localhost", "IP Address where postgres is running")
@@ -813,14 +830,6 @@ func main() {
 	postgresSSL := flag.String("pg_ssl", "disable", "Run with ssl mode?")
 	flag.Parse()
 
-	// Initialize RabbitMQ
-	messaging.Client.ConnectToRabbitMQ(*rabbitMQip)
-	err := messaging.Client.SubscribeToQueue("event.create", "sponsor-service", onEventCreatedMessage)
-	failOnError(err, "Could not subscribe to channel event.create")
-
-	err = messaging.Client.SubscribeToQueue("event.modify", "sponsor-service", onEventModifiedMessage)
-	failOnError(err, "Could not subscribe to channel event.modify")
-
 	//initializeDb()
 	db.InitDB(db.Creds{
 		Host:     *postgresIp,
@@ -830,6 +839,20 @@ func main() {
 		Dbname:   *postgresDbName,
 		Sslmode:  *postgresSSL,
 	})
+
+	// Initialize RabbitMQ
+	messagingClient = &messaging.RabbitMQClient{}
+	messagingClient.ConnectToRabbitMQ(*rabbitMQip)
+	//if err != nil {
+	//	fmt.Printf("Something went wrong with connecting to rabbit mq %s", err.Error())
+	//} else {
+	//
+	//}
+	err := messagingClient.SubscribeToQueue("event.create", "sponsor-service", onEventCreatedMessage)
+	failOnError(err, "Could not subscribe to channel event.create")
+
+	err = messagingClient.SubscribeToQueue("event.modify", "sponsor-service", onEventModifiedMessage)
+	failOnError(err, "Could not subscribe to channel event.modify")
 
 	// Initialize the router
 	router := mux.NewRouter()
