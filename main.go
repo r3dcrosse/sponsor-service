@@ -85,26 +85,18 @@ type HttpErrorJSON struct {
 	Error   map[string]interface{} `json:"error"`
 }
 
-// Get a list of sponsor organization names and each sponsor's level for an event
-//func getSponsorsForEvent(w http.ResponseWriter, r *http.Request) {
-//	w.Header().Set("Content-Type", "application/json")
-//	params := mux.Vars(r) // Gets params
-//
-//	// Looping through events to find the one from our request
-//	for _, event := range events {
-//		if event.Name == params["event"] {
-//			json.NewEncoder(w).Encode(event)
-//			return
-//		}
-//	}
-//
-//	// Return an empty event if none is found
-//	json.NewEncoder(w).Encode(&Event{
-//		Name:     "",
-//		Levels:   nil,
-//		Sponsors: nil,
-//	})
-//}
+// Helper functions
+func sendHttpErrorResponse(w http.ResponseWriter, statusCode int, err error) {
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(HttpErrorJSON{
+		Success: false,
+		Error: map[string]interface{}{
+			"error": map[string]interface{}{
+				"message": err.Error(),
+			},
+		},
+	})
+}
 
 // To create a member of a sponsor team
 func createMember(w http.ResponseWriter, r *http.Request) {
@@ -115,15 +107,7 @@ func createMember(w http.ResponseWriter, r *http.Request) {
 	// Check if the event even exists
 	event, err := db.GetEvent(eventId, -1)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(HttpErrorJSON{
-			Success: false,
-			Error: map[string]interface{}{
-				"error": map[string]interface{}{
-					"message": err.Error(),
-				},
-			},
-		})
+		sendHttpErrorResponse(w, http.StatusNotFound, err)
 		return
 	}
 
@@ -131,15 +115,7 @@ func createMember(w http.ResponseWriter, r *http.Request) {
 	sponsorId, err := strconv.Atoi(params["sponsor_id"])
 	s, err := db.GetSponsor(sponsorId)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(HttpErrorJSON{
-			Success: false,
-			Error: map[string]interface{}{
-				"error": map[string]interface{}{
-					"message": err.Error(),
-				},
-			},
-		})
+		sendHttpErrorResponse(w, http.StatusNotFound, err)
 		return
 	}
 	sponsor := Sponsor{
@@ -150,15 +126,7 @@ func createMember(w http.ResponseWriter, r *http.Request) {
 	// Get the sponsorship level from the DB
 	l, err := db.GetLevel(s.LevelID)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(HttpErrorJSON{
-			Success: false,
-			Error: map[string]interface{}{
-				"error": map[string]interface{}{
-					"message": err.Error(),
-				},
-			},
-		})
+		sendHttpErrorResponse(w, http.StatusNotFound, err)
 		return
 	}
 	level := Level{
@@ -171,16 +139,7 @@ func createMember(w http.ResponseWriter, r *http.Request) {
 	}
 	err = json.NewDecoder(r.Body).Decode(&member)
 	if err != nil {
-		fmt.Println(err)
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(HttpErrorJSON{
-			Success: false,
-			Error: map[string]interface{}{
-				"error": map[string]interface{}{
-					"message": err.Error(),
-				},
-			},
-		})
+		sendHttpErrorResponse(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -218,7 +177,6 @@ func createMember(w http.ResponseWriter, r *http.Request) {
 			fmt.Printf("Something went wrong when sending the message to sponsor.member.created | %s", err.Error())
 		}
 	}(savedMember, eventId, level, sponsor)
-
 }
 
 // To create a level
@@ -228,15 +186,7 @@ func createLevel(w http.ResponseWriter, r *http.Request) {
 	eventId, err := strconv.Atoi(params["event_id"])
 	event, err := db.GetEvent(eventId, -1)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(HttpErrorJSON{
-			Success: false,
-			Error: map[string]interface{}{
-				"error": map[string]interface{}{
-					"message": err.Error(),
-				},
-			},
-		})
+		sendHttpErrorResponse(w, http.StatusNotFound, err)
 		return
 	}
 
@@ -245,16 +195,7 @@ func createLevel(w http.ResponseWriter, r *http.Request) {
 	}
 	err = json.NewDecoder(r.Body).Decode(&level)
 	if err != nil {
-		fmt.Println(err)
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(HttpErrorJSON{
-			Success: false,
-			Error: map[string]interface{}{
-				"error": map[string]interface{}{
-					"message": err.Error(),
-				},
-			},
-		})
+		sendHttpErrorResponse(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -283,15 +224,7 @@ func createSponsor(w http.ResponseWriter, r *http.Request) {
 	eventId, err := strconv.Atoi(params["event_id"])
 	event, err := db.GetEvent(eventId, -1)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(HttpErrorJSON{
-			Success: false,
-			Error: map[string]interface{}{
-				"error": map[string]interface{}{
-					"message": err.Error(),
-				},
-			},
-		})
+		sendHttpErrorResponse(w, http.StatusNotFound, err)
 		return
 	}
 
@@ -300,16 +233,7 @@ func createSponsor(w http.ResponseWriter, r *http.Request) {
 	}
 	err = json.NewDecoder(r.Body).Decode(&sponsor)
 	if err != nil {
-		fmt.Println(err)
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(HttpErrorJSON{
-			Success: false,
-			Error: map[string]interface{}{
-				"error": map[string]interface{}{
-					"message": err.Error(),
-				},
-			},
-		})
+		sendHttpErrorResponse(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -326,15 +250,7 @@ func createSponsor(w http.ResponseWriter, r *http.Request) {
 		savedLevel, err := db.GetLevel(sponsor.Level.Id)
 		// Check if the event IDs match...
 		if err != nil || savedLevel.EventID != eventId {
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(HttpErrorJSON{
-				Success: false,
-				Error: map[string]interface{}{
-					"error": map[string]interface{}{
-						"message": err.Error(),
-					},
-				},
-			})
+			sendHttpErrorResponse(w, http.StatusBadRequest, err)
 			return
 		}
 
@@ -384,20 +300,6 @@ func createSponsor(w http.ResponseWriter, r *http.Request) {
 			},
 		})
 	}
-
-	// Check if we passed in any members of the sponsorship team
-	//var members []Member
-	//if len(sponsor.Members) > 0 {
-	//	for _, member := range sponsor.Members {
-	//		createdMember := createMember(member)
-	//		members = append(members, createdMember)
-	//	}
-	//
-	//	sponsor.Members = members
-	//}
-	//
-	//sponsors = append(sponsors, sponsor)
-	//json.NewEncoder(w).Encode(sponsor)
 }
 
 // Get an event
@@ -406,29 +308,13 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r) // Gets params
 	id, err := strconv.Atoi(params["id"])
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(HttpErrorJSON{
-			Success: false,
-			Error: map[string]interface{}{
-				"error": map[string]interface{}{
-					"message": err.Error(),
-				},
-			},
-		})
+		sendHttpErrorResponse(w, http.StatusNotFound, err)
 		return
 	}
 
 	result, err := db.GetEvent(id, -1)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(HttpErrorJSON{
-			Success: false,
-			Error: map[string]interface{}{
-				"error": map[string]interface{}{
-					"message": err.Error(),
-				},
-			},
-		})
+		sendHttpErrorResponse(w, http.StatusNotFound, err)
 		return
 	}
 
@@ -444,7 +330,6 @@ func getEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 // Get all events
-// Get an event
 func getAllEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -452,7 +337,7 @@ func getAllEvents(w http.ResponseWriter, r *http.Request) {
 
 	var events []Event
 	for _, result := range *results {
-		levels := []Level{}
+		var levels []Level
 		for _, level := range result.Levels {
 			levels = append(levels, Level{
 				EventID:                 level.EventID,
@@ -498,8 +383,7 @@ func createEvent(w http.ResponseWriter, r *http.Request) {
 	var event Event
 	err := json.NewDecoder(r.Body).Decode(&event)
 	if err != nil {
-		fmt.Println(err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		sendHttpErrorResponse(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -529,46 +413,20 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r) // Gets params
 	id, err := strconv.Atoi(params["id"])
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(HttpErrorJSON{
-			Success: false,
-			Error: map[string]interface{}{
-				"error": map[string]interface{}{
-					"message": err.Error(),
-				},
-			},
-		})
+		sendHttpErrorResponse(w, http.StatusNotFound, err)
 		return
 	}
 
 	var event Event
 	err = json.NewDecoder(r.Body).Decode(&event)
 	if err != nil {
-		fmt.Println(err)
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(HttpErrorJSON{
-			Success: false,
-			Error: map[string]interface{}{
-				"error": map[string]interface{}{
-					"message": err.Error(),
-				},
-			},
-		})
+		sendHttpErrorResponse(w, http.StatusBadRequest, err)
 		return
 	}
 
 	result, err := db.UpdateEvent(id, event.Name)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(HttpErrorJSON{
-			Success: false,
-			Error: map[string]interface{}{
-				"error": map[string]interface{}{
-					"message":   err.Error(),
-					"more_info": "Could not find the event using the ID you passed in",
-				},
-			},
-		})
+		sendHttpErrorResponse(w, http.StatusNotFound, err)
 		return
 	}
 	savedEvent := Event{
@@ -599,16 +457,7 @@ func patchEvent(w http.ResponseWriter, r *http.Request) {
 			} else {
 				savedLevel, err = db.UpdateLevel(l.Id, l.Name, l.Cost, l.MaxSponsors, l.MaxFreeBadgesPerSponsor, id)
 				if err != nil {
-					w.WriteHeader(http.StatusNotFound)
-					json.NewEncoder(w).Encode(HttpErrorJSON{
-						Success: false,
-						Error: map[string]interface{}{
-							"error": map[string]interface{}{
-								"message":   err.Error(),
-								"more_info": "Could not find the level using the level ID you passed in",
-							},
-						},
-					})
+					sendHttpErrorResponse(w, http.StatusNotFound, err)
 					return
 				}
 			}
@@ -637,36 +486,18 @@ func removeMember(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r) // Gets params
 	_, err := strconv.Atoi(params["event_id"])
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(HttpErrorJSON{
-			Success: false,
-			Error: map[string]interface{}{
-				"message": "Could not parse event ID from URL",
-			},
-		})
+		sendHttpErrorResponse(w, http.StatusBadRequest, err)
 		return
 	}
 	_, err = strconv.Atoi(params["sponsor_id"])
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(HttpErrorJSON{
-			Success: false,
-			Error: map[string]interface{}{
-				"message": "Could not parse the sponsor ID from URL",
-			},
-		})
+		sendHttpErrorResponse(w, http.StatusBadRequest, err)
 		return
 	}
 
 	_, err = strconv.Atoi(params["member_id"])
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(HttpErrorJSON{
-			Success: false,
-			Error: map[string]interface{}{
-				"message": "Could not parse the member ID from URL",
-			},
-		})
+		sendHttpErrorResponse(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -682,8 +513,6 @@ func removeMember(w http.ResponseWriter, r *http.Request) {
 // Callback functions for everytime we get a message from rabbit mq
 func onEventCreatedMessage(delivery amqp.Delivery) {
 	msg := string(delivery.Body)
-
-	fmt.Printf("Got this message from event.create: %v\n", msg)
 
 	// Format of the message will come in this shape:
 	/*
@@ -728,8 +557,6 @@ func onEventCreatedMessage(delivery amqp.Delivery) {
 
 func onEventModifiedMessage(delivery amqp.Delivery) {
 	msg := string(delivery.Body)
-
-	fmt.Printf("Got this message from event.modify: %v\n", string(delivery.Body))
 
 	// Format of the message will come in this shape:
 	/*
@@ -830,7 +657,7 @@ func main() {
 	postgresSSL := flag.String("pg_ssl", "disable", "Run with ssl mode?")
 	flag.Parse()
 
-	//initializeDb()
+	// Initialize DB
 	db.InitDB(db.Creds{
 		Host:     *postgresIp,
 		Port:     *postgresPort,
@@ -843,11 +670,7 @@ func main() {
 	// Initialize RabbitMQ
 	messagingClient = &messaging.RabbitMQClient{}
 	messagingClient.ConnectToRabbitMQ(*rabbitMQip)
-	//if err != nil {
-	//	fmt.Printf("Something went wrong with connecting to rabbit mq %s", err.Error())
-	//} else {
-	//
-	//}
+
 	err := messagingClient.SubscribeToQueue("event.create", "sponsor-service", onEventCreatedMessage)
 	failOnError(err, "Could not subscribe to channel event.create")
 
@@ -863,12 +686,10 @@ func main() {
 	router.HandleFunc("/sponsor-service/v1/event", createEvent).Methods("POST")
 	router.HandleFunc("/sponsor-service/v1/event/{id}", patchEvent).Methods("PATCH")
 	router.HandleFunc("/sponsor-service/v1/event/{event_id}/level", createLevel).Methods("POST")
-	//router.HandleFunc("/sponsor/{event}", getSponsorsForEvent).Methods("GET")       // show a list of sponsor organization names and each sponsor's level for an event
-	router.HandleFunc("/sponsor-service/v1/event/{event_id}/sponsor", createSponsor).Methods("POST") // create a sponsor at a specific level
+	router.HandleFunc("/sponsor-service/v1/event/{event_id}/sponsor", createSponsor).Methods("POST")
 	router.HandleFunc("/sponsor-service/v1/event/{event_id}/sponsor/{sponsor_id}/member", createMember).Methods("POST")
 	router.HandleFunc("/sponsor-service/v1/event/{event_id}/sponsor/{sponsor_id}/member/{member_id}", removeMember).Methods("DELETE")
 
 	// Start server
 	log.Fatal(http.ListenAndServe(":8000", router))
-
 }

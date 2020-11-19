@@ -6,6 +6,8 @@ WORKDIR /sponsor-service
 RUN go mod download
 RUN go build -o main .
 
+EXPOSE 8000
+
 ENV RABBITMQ_IP "localhost:5672"
 ENV PG_IP "localhost"
 ENV PG_PORT "5432"
