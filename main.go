@@ -12,7 +12,6 @@ import (
 	"github.com/streadway/amqp"
 	"log"
 	"net/http"
-	"strings"
 )
 
 type LevelMessage struct {
@@ -33,9 +32,8 @@ func onEventCreatedMessage(delivery amqp.Delivery) {
 
 	// Format of the message will come in this shape:
 	/*
-
 			"
-			EVENT CREATED ::: {
+			{
 		      "id": 1337,
 			  "name": "Super Awesome Event",
 			  "sponsors": [
@@ -47,13 +45,10 @@ func onEventCreatedMessage(delivery amqp.Delivery) {
 			  ]
 			}
 			"
-
 	*/
 
-	// Split the delivery body on " ::: "
-	s := strings.SplitAfter(msg, " ::: ")[1]
 	dat := EventMessage{}
-	if err := json.Unmarshal([]byte(s), &dat); err != nil {
+	if err := json.Unmarshal([]byte(msg), &dat); err != nil {
 		fmt.Printf("Could not parse new event json from rabbitmq message | %s", err)
 		return
 	}
@@ -77,9 +72,8 @@ func onEventModifiedMessage(delivery amqp.Delivery) {
 
 	// Format of the message will come in this shape:
 	/*
-
 			"
-			EVENT UPDATED ::: {
+			{
 		      "id": 1337,
 			  "name": "Super Awesome Event",
 			  "sponsors": [
@@ -91,13 +85,10 @@ func onEventModifiedMessage(delivery amqp.Delivery) {
 			  ]
 			}
 			"
-
 	*/
 
-	// Split the delivery body on " ::: "
-	s := strings.SplitAfter(msg, " ::: ")[1]
 	dat := EventMessage{}
-	if err := json.Unmarshal([]byte(s), &dat); err != nil {
+	if err := json.Unmarshal([]byte(msg), &dat); err != nil {
 		fmt.Printf("Could not parse new event json from rabbitmq message | %s", err.Error())
 		return
 	}
